@@ -123,7 +123,7 @@ python ecg_view.py --seconds 5 --log serial.log
 
 Without a port the viewer finds the board by the USB id of its DAPLink (0d28:0204), waits if it
 is not plugged in and reconnects after a replug. Space pauses, `q` quits. The bottom line shows
-the last status line of the firmware. It was run on Linux with the board; on Windows it has not
+the connection and, for a few seconds, the last status line of the firmware. It was run on Linux with the board; on Windows it has not
 been run yet.
 
 Output: one sample per line in mV; lines starting with `#` are status. At every reset the firmware
