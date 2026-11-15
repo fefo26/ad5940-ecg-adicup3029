@@ -25,6 +25,7 @@ FS = 250
 BAUD = 230400
 DAPLINK_ID = (0x0D28, 0x0204)
 BG = "#101418"
+NOTE_SECONDS = 6    # the firmware repeats a warning every 5 s while it holds
 
 
 def find_port():
@@ -41,7 +42,9 @@ class Viewer:
         self.n = int(seconds * FS)
         self.seconds = seconds
         self.samples = collections.deque(maxlen=self.n)
-        self.status = "starting"
+        self.link = "starting"      # state of the serial connection
+        self.note = ""              # last status line of the firmware
+        self.note_time = 0.0
         self.paused = False
         self.running = True
         self.center = None
@@ -71,15 +74,15 @@ class Viewer:
         while self.running:
             port = self.port or find_port()
             if port is None:
-                self.status = "waiting for the board (DAPLink serial port not found)"
+                self.link = "waiting for the board (DAPLink serial port not found)"
                 time.sleep(1)
                 continue
             try:
                 with serial.Serial(port, BAUD, timeout=0.2) as ser:
-                    self.status = "connected to %s, waiting for data" % port
+                    self.link = "connected to %s" % port
                     self.read_port(ser)
             except (serial.SerialException, OSError) as exc:
-                self.status = "%s: %s" % (port, exc)
+                self.link = "%s: %s" % (port, exc)
                 time.sleep(1)
 
     def read_port(self, ser):
@@ -93,7 +96,8 @@ class Viewer:
             for raw in lines:
                 line = raw.decode("ascii", "ignore").strip()
                 if line.startswith("#"):
-                    self.status = line[1:].strip()
+                    self.note = line[1:].strip()
+                    self.note_time = time.monotonic()
                     continue
                 try:
                     value = float(line.split()[0])
@@ -101,6 +105,12 @@ class Viewer:
                     continue
                 if not self.paused:
                     self.samples.append(value)
+
+    def status_text(self):
+        """Connection state, plus the firmware status while it is recent."""
+        if self.note and time.monotonic() - self.note_time < NOTE_SECONDS:
+            return "%s: %s" % (self.link, self.note)
+        return self.link
 
     def draw(self):
         c = self.canvas
@@ -131,7 +141,7 @@ class Viewer:
                 pts.append(h * (top - v) / (top - bottom))
             c.create_line(pts, fill="#40e080", width=1.5)
         self.label.config(text="%s%s   |   %d s window, 1 s per division   |   space: pause, q: quit"
-                          % ("[PAUSED] " if self.paused else "", self.status, self.seconds))
+                          % ("[PAUSED] " if self.paused else "", self.status_text(), self.seconds))
         if self.running:
             self.root.after(40, self.draw)
 
